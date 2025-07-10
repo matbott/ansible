@@ -1,6 +1,9 @@
 ---
 - name: Reporte de Estado de Servicios
   hosts: lab
+  gather_facts: yes
+  become: yes
+
   vars:
     servicios_a_revisar:
       - sshd.service
@@ -11,53 +14,23 @@
       - sssd.service
       - vmtoolsd.service
       - oddjobd.service
+
   tasks:
     - name: Recolectar estado de todos los servicios
-      become: yes
       ansible.builtin.service_facts:
-    
-    - name: Generar reporte inline
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.copy:
-        content: |
-          # Reporte de Estado de Servicios - {{ ansible_date_time.date }}
-          
-          {% for host in groups['lab'] %}
-          {% if hostvars[host].ansible_facts is defined and hostvars[host].ansible_facts.services is defined %}
-          ## ➞ Servidor: {{ hostvars[host].inventory_hostname }}
-          
-          | Servicio | Estado | Habilitado al Iniciar |
-          |----------|--------|-----------------------|
+
+    - name: Generar reporte por host
+      ansible.builtin.debug:
+        msg: |
+          ## ➞ Servidor: {{ inventory_hostname }}
+
           {% for servicio in servicios_a_revisar %}
-          {% if servicio in hostvars[host].ansible_facts.services %}
-          {% set srv = hostvars[host].ansible_facts.services[servicio] %}
-          | `{{ srv.name }}` | {{ '✅ Corriendo' if srv.state == 'running' else '❌ Detenido' }} | {{ '✅ Sí' if srv.status == 'enabled' else 'ℹ️ No' }} |
+          {% if servicio in ansible_facts.services %}
+          {% set srv = ansible_facts.services[servicio] %}
+          - {{ srv.name }}:
+              Estado: {{ '✅ Corriendo' if srv.state == 'running' else '❌ Detenido' }}
+              Habilitado al iniciar: {{ '✅ Sí' if srv.status == 'enabled' else 'ℹ️ No' }}
           {% else %}
-          | `{{ servicio }}` | ❌ No Encontrado | --- |
+          - {{ servicio }}: ❌ No encontrado
           {% endif %}
           {% endfor %}
-          
-          {% endif %}
-          {% endfor %}
-        dest: "/tmp/reporte_estado_servicios_{{ ansible_date_time.iso8601_basic_short }}.md"
-      register: reporte_generado
-    
-    - name: Leer el contenido del reporte generado
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.slurp:
-        src: "{{ reporte_generado.dest }}"
-      register: contenido_del_reporte
-    
-    - name: Mostrar reporte final en consola
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.debug:
-        msg: "{{ (contenido_del_reporte.content | b64decode).split('\n') }}"
-    
-    - name: Mostrar ubicación del archivo
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.debug:
-        msg: "Reporte generado en: {{ reporte_generado.dest }}"
