@@ -1,6 +1,6 @@
 # install_ssh_key.yml
 - name: Copiar clave pública para ansible.adm
-  hosts: lab
+  hosts: all
   become: true
 
   # Esta variable la definiremos en AWX
