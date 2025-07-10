@@ -4,34 +4,47 @@
   gather_facts: yes
   become: no
 
+  vars:
+    reporte_resultado: []
+
   tasks:
     - name: Verificar si el agente de Zabbix está instalado
-      ansible.builtin.stat:
+      stat:
         path: /usr/sbin/zabbix_agentd
       register: zabbix_agent_status
 
     - name: Verificar si Cortex está instalado
-      ansible.builtin.stat:
+      stat:
         path: /usr/local/bin/cortex
       register: cortex_agent_status
 
-    - name: Generar reporte desde la plantilla
+    - name: Armar reporte por host
+      set_fact:
+        reporte_host: |
+          ## Host: {{ inventory_hostname }}
+          - CPU: {{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores
+          - Memoria: Total {{ ansible_memtotal_mb }} MB, Disponible {{ ansible_memfree_mb }} MB
+          - Disco raíz: {{ ansible_mounts[0].size_total | int // (1024*1024) }} MB total
+          - Zabbix: {{ 'Presente' if zabbix_agent_status.stat.exists else 'No instalado' }}
+          - Cortex: {{ 'Presente' if cortex_agent_status.stat.exists else 'No instalado' }}
       delegate_to: localhost
-      run_once: true
-      ansible.builtin.template:
-        src: reporte_recursos-cortex-zabbix.md.j2
-        dest: "reporte_recursos-cortex-zabbix.md.j2_{{ ansible_date_time.iso8601_basic_short }}.md"
-      register: reporte_generado
+      run_once: false
 
-    - name: Leer el contenido del reporte generado
+    - name: Agregar reporte del host a la lista global
+      set_fact:
+        reporte_resultado: "{{ reporte_resultado + [reporte_host] }}"
       delegate_to: localhost
-      run_once: true
-      ansible.builtin.command: "cat {{ reporte_generado.dest }}"
-      register: contenido_del_reporte
-      changed_when: false
+      run_once: false
 
-    - name: Mostrar reporte final en consola
+    - name: Mostrar reporte completo
+      debug:
+        msg: "{{ reporte_resultado }}"
       delegate_to: localhost
       run_once: true
-      ansible.builtin.debug:
-        msg: "{{ contenido_del_reporte.stdout_lines }}"
+
+    - name: Guardar reporte en archivo local (opcional)
+      copy:
+        content: "{{ reporte_resultado | join('\n\n') }}"
+        dest: "/tmp/reporte_recursos_{{ ansible_date_time.iso8601_basic_short }}.md"
+      delegate_to: localhost
+      run_once: true
