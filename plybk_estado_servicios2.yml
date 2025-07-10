@@ -3,12 +3,15 @@
   gather_facts: yes
   become: yes
 
-  # --- AÑADE ESTA SECCIÓN ---
-  # Esto le dice a Ansible que sea menos estricto con los permisos
-  # de los archivos temporales, solucionando el error.
+  # --- SECCIÓN AÑADIDA ---
+  # Forzamos a Ansible a usar una carpeta temporal simple y conocida
+  vars:
+    ansible_remote_tmp: /var/tmp/ansible-{{ ansible_user_id }}
+  # -------------------------
+
+  # El resto del playbook no cambia...
   environment:
     ANSIBLE_ALLOW_WORLD_READABLE_TMPFILES: '1'
-  # -------------------------
 
   vars:
     servicios_a_revisar:
