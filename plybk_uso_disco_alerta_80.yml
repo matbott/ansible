@@ -11,18 +11,15 @@
       delegate_to: localhost
       run_once: true
       ansible.builtin.set_fact:
+        # Esta tarea ahora es correcta, pero su salida es una cadena de texto
         discos_con_alerta: |
           {% set alertas = [] %}
           {% for host in ansible_play_hosts_all %}
             {% for mount in hostvars[host].get('ansible_mounts', []) %}
-              
-              {# 1. Calculamos el porcentaje de uso manualmente #}
               {% set uso_pct = 0 %}
               {% if mount.size_total > 0 %}
                 {% set uso_pct = (((mount.size_total - mount.size_available) * 100) / mount.size_total) | round | int %}
               {% endif %}
-
-              {# 2. Comparamos el valor calculado con el umbral #}
               {% if uso_pct > umbral_alerta %}
                 {% set _ = alertas.append({
                     'host': host,
@@ -31,7 +28,6 @@
                     'total_gb': (mount.size_total / (1024*1024*1024)) | round(1)
                   }) %}
               {% endif %}
-
             {% endfor %}
           {% endfor %}
           {{ alertas }}
@@ -44,8 +40,8 @@
           ---
           🚨 Reporte de Discos con Uso Superior al {{ umbral_alerta }}% ({{ ansible_date_time.date }})
           ---
-          {% if discos_con_alerta | length > 0 %}
-          {% for disco in discos_con_alerta %}
+          {% if (discos_con_alerta | from_yaml) | length > 0 %}
+          {% for disco in discos_con_alerta | from_yaml %}
           Host: {{ '%-20s' | format(disco.host) }} | Montaje: {{ '%-15s' | format(disco.mount) }} | Uso: {{ '%-5s' | format(disco.usage ~ '%') }} | Total: {{ disco.total_gb }} GB
           {% endfor %}
           {% else %}
