@@ -1,30 +1,40 @@
----
-- name: Reporte básico de recursos de las VMs
+- name: Reporte consolidado de recursos de las VMs
   hosts: lab
   gather_facts: yes
+  become: no # No es necesario para recolectar esta información
 
   tasks:
-    - name: Mostrar información de CPU
-      ansible.builtin.debug:
-        msg: "CPU: {{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores, {{ ansible_processor[0] }}"
-
-    - name: Mostrar memoria total y disponible (MB)
-      ansible.builtin.debug:
-        msg: "Memoria: Total {{ (ansible_memtotal_mb) }} MB, Disponible {{ (ansible_memfree_mb) }} MB"
-
-    - name: Mostrar espacio en disco de /
-      ansible.builtin.command: df -h /
-      register: disk_root
-
-    - name: Mostrar disco /
-      ansible.builtin.debug:
-        msg: "{{ disk_root.stdout }}"
-
-    - name: Mostrar tiempo de actividad (uptime)
+    - name: Obtener tiempo de actividad (uptime) en formato legible
       ansible.builtin.command: uptime -p
-      register: uptime
+      register: uptime_result
+      changed_when: false # Este comando no realiza cambios
 
-    - name: Mostrar uptime
+    - name: Mostrar reporte de recursos consolidado
+      vars:
+        # Filtramos los facts de los puntos de montaje para encontrar la raíz "/"
+        root_mount: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | first }}"
       ansible.builtin.debug:
-        msg: "{{ uptime.stdout }}"
+        msg: |
+          
+          =======================================
+          📊 Reporte de Recursos para: {{ inventory_hostname }}
+          =======================================
+          
+          🖥️  CPU
+              Cores: {{ ansible_processor_cores }}
+              vCPUs: {{ ansible_processor_vcpus }}
+              Modelo: {{ ansible_processor[2] }}
+
+          🧠  Memoria
+              Total: {{ ansible_memtotal_mb }} MB
+              Libre: {{ ansible_memfree_mb }} MB
+              Usada: {{ ansible_memtotal_mb - ansible_memfree_mb }} MB
+
+          💾  Disco (/)
+              Dispositivo: {{ root_mount.device }}
+              Tamaño Total: {{ (root_mount.size_total / (1024*1024*1024)) | round(1) }} GB
+              Espacio Disponible: {{ (root_mount.size_available / (1024*1024*1024)) | round(1) }} GB
+
+          ⏱️  Tiempo de Actividad
+              {{ uptime_result.stdout }}
 
