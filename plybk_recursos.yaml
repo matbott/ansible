@@ -27,3 +27,4 @@
     - name: Mostrar uptime
       ansible.builtin.debug:
         msg: "{{ uptime.stdout }}"
+

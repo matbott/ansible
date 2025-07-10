@@ -1,0 +1,31 @@
+---
+- name: Verificar Paquetes Desactualizados
+  hosts: lab
+
+  tasks:
+    - name: Obtener la lista de paquetes con actualizaciones pendientes
+      become: yes
+      ansible.builtin.dnf:
+        list: updates
+      register: dnf_updates
+
+    - name: Generar reporte desde la plantilla
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.template:
+        src: reporte_verificar_paquetes_desactualizados.md.j2
+        dest: "reporte_verificar_paquetes_desactualizados_{{ ansible_date_time.iso8601_basic_short }}.md"
+      register: reporte_generado
+
+    - name: Leer el contenido del reporte generado
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.command: "cat {{ reporte_generado.dest }}"
+      register: contenido_del_reporte
+      changed_when: false
+
+    - name: Mostrar reporte final en consola
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.debug:
+        msg: "{{ contenido_del_reporte.stdout_lines }}"

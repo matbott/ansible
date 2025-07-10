@@ -1,0 +1,29 @@
+---
+- name: Reporte de Uso de Disco
+  hosts: lab
+  become: no
+
+  vars:
+    umbral_alerta: 80 # Porcentaje de uso para generar una alerta
+
+  tasks:
+    - name: Generar reporte de discos desde la plantilla
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.template:
+        src: tpl_uso_disco_alerta_80.md.j2
+        dest: "reporte_uso_disco_alerta_80_{{ ansible_date_time.iso8601_basic_short }}.md"
+      register: reporte_generado
+
+    - name: Leer el contenido del reporte generado
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.command: "cat {{ reporte_generado.dest }}"
+      register: contenido_del_reporte
+      changed_when: false
+
+    - name: Mostrar reporte final en consola
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.debug:
+        msg: "{{ contenido_del_reporte.stdout_lines }}"

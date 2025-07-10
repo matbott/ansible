@@ -1,0 +1,37 @@
+---
+- name: Reporte de Sistema, Recursos y Agentes
+  hosts: lab
+  gather_facts: yes
+  become: no
+
+  tasks:
+    - name: Verificar si el agente de Zabbix está instalado
+      ansible.builtin.stat:
+        path: /usr/sbin/zabbix_agentd
+      register: zabbix_agent_status
+
+    - name: Verificar si Cortex está instalado
+      ansible.builtin.stat:
+        path: /usr/local/bin/cortex
+      register: cortex_agent_status
+
+    - name: Generar reporte desde la plantilla
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.template:
+        src: reporte_recursos-cortex-zabbix.md.j2
+        dest: "reporte_recursos-cortex-zabbix.md.j2_{{ ansible_date_time.iso8601_basic_short }}.md"
+      register: reporte_generado
+
+    - name: Leer el contenido del reporte generado
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.command: "cat {{ reporte_generado.dest }}"
+      register: contenido_del_reporte
+      changed_when: false
+
+    - name: Mostrar reporte final en consola
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.debug:
+        msg: "{{ contenido_del_reporte.stdout_lines }}"
