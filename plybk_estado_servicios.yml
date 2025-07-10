@@ -1,4 +1,3 @@
----
 - name: Reporte de Estado de Servicios
   hosts: lab
   gather_facts: yes
@@ -14,26 +13,45 @@
       - sssd.service
       - vmtoolsd.service
       - oddjobd.service
+      - un-servicio-con-un-nombre-muy-largo.service # Ejemplo para probar alineación
 
   tasks:
     - name: Recolectar estado de todos los servicios
       ansible.builtin.service_facts:
 
-    - name: Mostrar reporte por host (tabla legible)
+    - name: Mostrar reporte por host (tabla bien formateada)
       vars:
-        tabla: |
-          ----------------------------
-          🖥️  Servidor: {{ inventory_hostname }}
-          ----------------------------
-          | Servicio              | Estado        | Al iniciar    |
-          |-----------------------|---------------|----------------|
+        # Definimos los anchos de las columnas
+        ancho_servicio: 45
+        ancho_estado: 18
+        ancho_inicio: 15
+        
+        # Creamos el encabezado de la tabla
+        header: |
+          +{{ '-' * (ancho_servicio + 2) }}+{{ '-' * (ancho_estado + 2) }}+{{ '-' * (ancho_inicio + 2) }}+
+          | {{ '%-{}s'.format(ancho_servicio) | format('Servicio') }} | {{ '%-{}s'.format(ancho_estado) | format('Estado Actual') }} | {{ '%-{}s'.format(ancho_inicio) | format('Habilitado') }} |
+          +{{ '-' * (ancho_servicio + 2) }}+{{ '-' * (ancho_estado + 2) }}+{{ '-' * (ancho_inicio + 2) }}+
+        
+        # Generamos las filas de la tabla
+        filas: |
           {% for servicio in servicios_a_revisar %}
           {% if servicio in ansible_facts.services %}
           {% set srv = ansible_facts.services[servicio] %}
-          | {{ srv.name }} | {{ '✅ Corriendo' if srv.state == 'running' else '❌ Detenido' }} | {{ '✅ Sí' if srv.status == 'enabled' else 'ℹ️ No' }} |
+          | {{ '%-{}s'.format(ancho_servicio) | format(srv.name) }} | {{ '%-{}s'.format(ancho_estado) | format('✅ Corriendo' if srv.state == 'running' else '❌ Detenido') }} | {{ '%-{}s'.format(ancho_inicio) | format('✅ Sí' if srv.status == 'enabled' else 'ℹ️ No') }} |
           {% else %}
-          | {{ servicio }} | ❌ No encontrado | --- |
+          | {{ '%-{}s'.format(ancho_servicio) | format(servicio) }} | {{ '%-{}s'.format(ancho_estado) | format('❓ No encontrado') }} | {{ '%-{}s'.format(ancho_inicio) | format('---') }} |
           {% endif %}
           {% endfor %}
+
+        # Unimos todo para el reporte final
+        reporte_final: |
+          
+          ------------------------------------------
+          🖥️   Reporte del Servidor: {{ inventory_hostname }}
+          ------------------------------------------
+          {{ header }}
+          {{ filas }}
+          +{{ '-' * (ancho_servicio + 2) }}+{{ '-' * (ancho_estado + 2) }}+{{ '-' * (ancho_inicio + 2) }}+
+
       ansible.builtin.debug:
-        msg: "{{ tabla }}"
+        msg: "{{ reporte_final }}"
