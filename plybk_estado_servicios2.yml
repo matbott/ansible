@@ -3,6 +3,13 @@
   gather_facts: yes
   become: yes
 
+  # --- AÑADE ESTA SECCIÓN ---
+  # Esto le dice a Ansible que sea menos estricto con los permisos
+  # de los archivos temporales, solucionando el error.
+  environment:
+    ANSIBLE_ALLOW_WORLD_READABLE_TMPFILES: '1'
+  # -------------------------
+
   vars:
     servicios_a_revisar:
       - sshd.service
@@ -21,7 +28,6 @@
     - name: Generar y mostrar reporte consolidado en consola
       delegate_to: localhost
       run_once: true
-      # Usamos 'shell' y 'echo -e' para imprimir directamente a la salida estándar
       ansible.builtin.shell: |
         echo -e "
         {% for host in ansible_play_hosts_all %}
@@ -34,10 +40,9 @@
         - {{ '%-25s' | format(servicio) }} | Estado: ❓ No Encontrado\n
             {% endif %}
           {% endfor %}
-        \n  {# Añadimos una línea en blanco entre cada servidor para mayor legibilidad #}
+        \n
         {% endfor %}
         "
       args:
-        # Esto evita que Ansible muestre una advertencia sobre el uso de 'shell'
         warn: false
       changed_when: false
