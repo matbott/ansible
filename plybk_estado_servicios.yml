@@ -16,15 +16,31 @@
     - name: Recolectar estado de todos los servicios
       ansible.builtin.service_facts:
     
-    - name: Generar reporte desde la plantilla
+    - name: Generar reporte inline
       delegate_to: localhost
       run_once: true
-      ansible.builtin.template:
-        src: tpl_estado_servicios.md.j2
+      ansible.builtin.copy:
+        content: |
+          # Reporte de Estado de Servicios - {{ ansible_date_time.date }}
+          
+          {% for host in groups['lab'] %}
+          {% if hostvars[host].ansible_facts is defined and hostvars[host].ansible_facts.services is defined %}
+          ## ➞ Servidor: {{ hostvars[host].inventory_hostname }}
+          
+          | Servicio | Estado | Habilitado al Iniciar |
+          |----------|--------|-----------------------|
+          {% for servicio in servicios_a_revisar %}
+          {% if servicio in hostvars[host].ansible_facts.services %}
+          {% set srv = hostvars[host].ansible_facts.services[servicio] %}
+          | `{{ srv.name }}` | {{ '✅ Corriendo' if srv.state == 'running' else '❌ Detenido' }} | {{ '✅ Sí' if srv.status == 'enabled' else 'ℹ️ No' }} |
+          {% else %}
+          | `{{ servicio }}` | ❌ No Encontrado | --- |
+          {% endif %}
+          {% endfor %}
+          
+          {% endif %}
+          {% endfor %}
         dest: "/tmp/reporte_estado_servicios_{{ ansible_date_time.iso8601_basic_short }}.md"
-      vars:
-        # Pasar explícitamente la lista de hosts
-        hosts_to_process: "{{ groups['lab'] }}"
       register: reporte_generado
     
     - name: Leer el contenido del reporte generado
