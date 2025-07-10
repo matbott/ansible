@@ -19,18 +19,21 @@
     - name: Recolectar estado de todos los servicios
       ansible.builtin.service_facts:
 
-    - name: Generar reporte por host
-      ansible.builtin.debug:
-        msg: |
-          ## ➞ Servidor: {{ inventory_hostname }}
-
+    - name: Mostrar reporte por host (formato tabla)
+      vars:
+        tabla: |
+          ----------------------------
+          🖥️  Servidor: {{ inventory_hostname }}
+          ----------------------------
+          | Servicio           | Estado       | Al iniciar |
+          |--------------------|--------------|------------|
           {% for servicio in servicios_a_revisar %}
           {% if servicio in ansible_facts.services %}
           {% set srv = ansible_facts.services[servicio] %}
-          - {{ srv.name }}:
-              Estado: {{ '✅ Corriendo' if srv.state == 'running' else '❌ Detenido' }}
-              Habilitado al iniciar: {{ '✅ Sí' if srv.status == 'enabled' else 'ℹ️ No' }}
+          | {{ srv.name | ljust(19) }} | {{ '✅ Corriendo' if srv.state == 'running' else '❌ Detenido' | ljust(12) }} | {{ '✅ Sí' if srv.status == 'enabled' else 'ℹ️ No' | ljust(9) }} |
           {% else %}
-          - {{ servicio }}: ❌ No encontrado
+          | {{ servicio | ljust(19) }} | ❌ No encontrado |     ---     |
           {% endif %}
           {% endfor %}
+      ansible.builtin.debug:
+        msg: "{{ tabla }}"
