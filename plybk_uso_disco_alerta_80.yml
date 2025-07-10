@@ -1,4 +1,4 @@
-- name: Reporte Completo de Uso de Disco
+- name: Reporte Simple de Uso de Disco
   hosts: lab
   gather_facts: yes
   become: no
@@ -8,45 +8,34 @@
       delegate_to: localhost
       run_once: true
       ansible.builtin.set_fact:
-        # Creamos un diccionario para agrupar los discos por servidor
         reporte_por_host: |
           {% set reporte = {} %}
           {% for host in ansible_play_hosts_all %}
             {% set discos_del_host = [] %}
             {% for mount in hostvars[host].get('ansible_mounts', []) %}
-              
-              {# Calculamos el porcentaje de uso para cada disco #}
               {% set uso_pct = 0 %}
               {% if mount.size_total > 0 %}
                 {% set uso_pct = (((mount.size_total - mount.size_available) * 100) / mount.size_total) | round | int %}
               {% endif %}
-
-              {# Añadimos el disco a la lista de este host (sin condiciones) #}
               {% set _ = discos_del_host.append({
                   'mount': mount.mount,
                   'usage': uso_pct,
                   'total_gb': (mount.size_total / (1024*1024*1024)) | round(1)
                 }) %}
-
             {% endfor %}
-            {# Guardamos la lista de discos bajo el nombre del host #}
             {% set _ = reporte.update({host: discos_del_host}) %}
           {% endfor %}
           {{ reporte }}
 
-    - name: Mostrar reporte final agrupado por host
+    - name: Mostrar reporte simple
       delegate_to: localhost
       run_once: true
       ansible.builtin.debug:
         msg: |
-          ---
-          📊 Reporte Completo de Uso de Disco ({{ ansible_date_time.date }})
-          ---
           {% for host, discos in (reporte_por_host | from_yaml).items() %}
           
-          🖥️  Servidor: {{ host }}
-          ------------------------------------------------------------------
+          --- {{ host }} ---
           {% for disco in discos %}
-              - Montaje: {{ '%-20s' | format(disco.mount) }} | Uso: {{ '%-5s' | format(disco.usage ~ '%') }} | Total: {{ disco.total_gb }} GB
+          - {{ disco.mount }}: {{ disco.usage }}%
           {% endfor %}
           {% endfor %}
