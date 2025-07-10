@@ -2,21 +2,25 @@
 - name: Copiar clave pública para ansible.adm
   hosts: lab
   become: true
+
+  # Esta variable la definiremos en AWX
+  vars:
+    user_name: ansible.adm
+    user_group: unix-infraestructura
+    ssh_public_key: "{{ ssh_public_key_content }}"
+
   tasks:
     - name: Crear carpeta .ssh si no existe
       ansible.builtin.file:
-        path: /home/ansible.adm/.ssh
+        path: "/home/{{ user_name }}/.ssh"
         state: directory
-        owner: ansible.adm
-        group: unix-infraestructura 
+        owner: "{{ user_name }}"
+        group: "{{ user_group }}"
         mode: '0700'
 
-    - name: Copiar clave pública al archivo authorized_keys
-      ansible.builtin.copy:
-        src: /home/ansible.adm/.ssh/id_rsa.pub
-        dest: /home/ansible.adm/.ssh/authorized_keys
-        owner: ansible.adm
-        group: unix-infraestructura
-        mode: '0644'
-        remote_src: no
-
+    - name: Asegurar que la clave pública existe en authorized_keys
+      ansible.posix.authorized_key:
+        user: "{{ user_name }}"
+        key: "{{ ssh_public_key }}"
+        state: present
+        manage_dir: no # Ya gestionamos el directorio en el paso anterior
