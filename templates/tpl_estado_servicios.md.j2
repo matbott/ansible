@@ -1,6 +1,6 @@
 # Reporte de Estado de Servicios - {{ ansible_date_time.date }}
 
-{% for host in ansible_play_hosts_all %}
+{% for host in groups['lab'] %}
 {% if hostvars[host].ansible_facts is defined and hostvars[host].ansible_facts.services is defined %}
 ## ➞ Servidor: {{ hostvars[host].inventory_hostname }}
 
