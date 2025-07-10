@@ -1,29 +1,46 @@
----
-- name: Reporte de Uso de Disco
+- name: Reporte de Uso de Disco en Consola
   hosts: lab
+  gather_facts: yes
   become: no
 
   vars:
     umbral_alerta: 80 # Porcentaje de uso para generar una alerta
 
   tasks:
-    - name: Generar reporte de discos desde la plantilla
+    - name: Identificar discos que superan el umbral
       delegate_to: localhost
       run_once: true
-      ansible.builtin.template:
-        src: tpl_uso_disco_alerta_80.md.j2
-        dest: "reporte_uso_disco_alerta_80_{{ ansible_date_time.iso8601_basic_short }}.md"
-      register: reporte_generado
-
-    - name: Leer el contenido del reporte generado
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.command: "cat {{ reporte_generado.dest }}"
-      register: contenido_del_reporte
-      changed_when: false
+      ansible.builtin.set_fact:
+        # Creamos una lista vacía para guardar los discos con alertas
+        discos_con_alerta: |
+          {% set alertas = [] %}
+          {% for host in ansible_play_hosts_all %}
+            {% for mount in hostvars[host].get('ansible_mounts', []) %}
+              {% if (mount.usage | replace('%', '') | int) > umbral_alerta %}
+                {% set _ = alertas.append({
+                    'host': host,
+                    'mount': mount.mount,
+                    'usage': mount.usage,
+                    'total_gb': (mount.size_total / (1024*1024*1024)) | round(1)
+                  }) %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          {{ alertas }}
 
     - name: Mostrar reporte final en consola
       delegate_to: localhost
       run_once: true
       ansible.builtin.debug:
-        msg: "{{ contenido_del_reporte.stdout_lines }}"
+        msg: |
+          ---
+          🚨 Reporte de Discos con Uso Superior al {{ umbral_alerta }}% ({{ ansible_date_time.date }})
+          ---
+          {% if discos_con_alerta | length > 0 %}
+          {% for disco in discos_con_alerta %}
+          Host: {{ '%-20s' | format(disco.host) }} | Montaje: {{ '%-15s' | format(disco.mount) }} | Uso: {{ '%-5s' | format(disco.usage) }} | Total: {{ disco.total_gb }} GB
+          {% endfor %}
+          {% else %}
+          ✅ No se encontraron discos que superen el umbral del {{ umbral_alerta }}%.
+          {% endif %}
+          ---
