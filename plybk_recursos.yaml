@@ -1,0 +1,29 @@
+---
+- name: Reporte básico de recursos de las VMs
+  hosts: lab
+  gather_facts: yes
+
+  tasks:
+    - name: Mostrar información de CPU
+      ansible.builtin.debug:
+        msg: "CPU: {{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores, {{ ansible_processor[0] }}"
+
+    - name: Mostrar memoria total y disponible (MB)
+      ansible.builtin.debug:
+        msg: "Memoria: Total {{ (ansible_memtotal_mb) }} MB, Disponible {{ (ansible_memfree_mb) }} MB"
+
+    - name: Mostrar espacio en disco de /
+      ansible.builtin.command: df -h /
+      register: disk_root
+
+    - name: Mostrar disco /
+      ansible.builtin.debug:
+        msg: "{{ disk_root.stdout }}"
+
+    - name: Mostrar tiempo de actividad (uptime)
+      ansible.builtin.command: uptime -p
+      register: uptime
+
+    - name: Mostrar uptime
+      ansible.builtin.debug:
+        msg: "{{ uptime.stdout }}"
