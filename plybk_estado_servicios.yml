@@ -25,7 +25,7 @@
     - name: Mostrar estado de cada servicio
       ansible.builtin.debug:
         msg: >-
-          Servicio: {{ item |-}}
+          Servicio: {{ item }}
           {% if item in ansible_facts.services %}
             {% set srv = ansible_facts.services[item] %}
             | Estado: {{ '✅ Activo' if srv.state == 'running' else '❌ Inactivo' }}
