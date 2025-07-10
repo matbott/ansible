@@ -19,6 +19,7 @@
     - name: Generar reporte inline
       delegate_to: localhost
       run_once: true
+      become: no
       ansible.builtin.copy:
         content: |
           # Reporte de Estado de Servicios - {{ ansible_date_time.date }}
@@ -46,6 +47,7 @@
     - name: Leer el contenido del reporte generado
       delegate_to: localhost
       run_once: true
+      become: no
       ansible.builtin.slurp:
         src: "{{ reporte_generado.dest }}"
       register: contenido_del_reporte
@@ -53,11 +55,13 @@
     - name: Mostrar reporte final en consola
       delegate_to: localhost
       run_once: true
+      become: no
       ansible.builtin.debug:
         msg: "{{ (contenido_del_reporte.content | b64decode).split('\n') }}"
     
     - name: Mostrar ubicación del archivo
       delegate_to: localhost
       run_once: true
+      become: no
       ansible.builtin.debug:
         msg: "Reporte generado en: {{ reporte_generado.dest }}"
