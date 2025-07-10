@@ -1,18 +1,14 @@
-- name: Reporte de Estado de Servicios (Estilo AWX Limpio)
+- name: Reporte de Estado de Servicios (Método SU)
   hosts: lab
   gather_facts: yes
+
+  # --- CAMBIO PRINCIPAL ---
+  # Cambiamos el método de escalada a 'su'
   become: yes
+  become_method: su
 
-  # --- SECCIÓN AÑADIDA ---
-  # Forzamos a Ansible a usar una carpeta temporal simple y conocida
-  vars:
-    ansible_remote_tmp: /var/tmp/ansible-{{ ansible_user_id }}
-  # -------------------------
-
-  # El resto del playbook no cambia...
-  environment:
-    ANSIBLE_ALLOW_WORLD_READABLE_TMPFILES: '1'
-
+  # --- SECCIÓN 'vars' CORREGIDA ---
+  # Unificamos las dos secciones en una sola
   vars:
     servicios_a_revisar:
       - sshd.service
