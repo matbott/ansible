@@ -1,6 +1,6 @@
----
-- name: Verificar Paquetes Desactualizados
+- name: Verificar Paquetes Desactualizados en Consola
   hosts: lab
+  gather_facts: no # No necesitamos facts generales para esta tarea
 
   tasks:
     - name: Obtener la lista de paquetes con actualizaciones pendientes
@@ -9,23 +9,29 @@
         list: updates
       register: dnf_updates
 
-    - name: Generar reporte desde la plantilla
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.template:
-        src: reporte_verificar_paquetes_desactualizados.md.j2
-        dest: "reporte_verificar_paquetes_desactualizados_{{ ansible_date_time.iso8601_basic_short }}.md"
-      register: reporte_generado
-
-    - name: Leer el contenido del reporte generado
-      delegate_to: localhost
-      run_once: true
-      ansible.builtin.command: "cat {{ reporte_generado.dest }}"
-      register: contenido_del_reporte
-      changed_when: false
-
-    - name: Mostrar reporte final en consola
+    - name: Procesar y mostrar el reporte de actualizaciones
       delegate_to: localhost
       run_once: true
       ansible.builtin.debug:
-        msg: "{{ contenido_del_reporte.stdout_lines }}"
+        msg: |
+          {% set hosts_con_updates = [] %}
+          {% for host in ansible_play_hosts_all %}
+            {% if hostvars[host].get('dnf_updates', {}).get('results', []) | length > 0 %}
+              {% set _ = hosts_con_updates.append(host) %}
+            {% endif %}
+          {% endfor %}
+          ---
+          📦 Reporte de Paquetes Desactualizados ({{ ansible_date_time.date }})
+          ---
+          {% if hosts_con_updates | length > 0 %}
+          {% for host in hosts_con_updates %}
+          
+          --- {{ host }} ({{ hostvars[host].dnf_updates.results | length }} paquetes) ---
+            {% for pkg in hostvars[host].dnf_updates.results %}
+            - {{ pkg.name }}
+            {% endfor %}
+          {% endfor %}
+          {% else %}
+          ✅ Todos los servidores están actualizados.
+          {% endif %}
+          ---
