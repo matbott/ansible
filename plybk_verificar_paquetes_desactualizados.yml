@@ -1,6 +1,6 @@
 - name: Verificar Paquetes Desactualizados en Consola
   hosts: lab
-  gather_facts: no # No necesitamos facts generales para esta tarea
+  gather_facts: yes # No necesitamos facts generales para esta tarea
 
   tasks:
     - name: Obtener la lista de paquetes con actualizaciones pendientes
