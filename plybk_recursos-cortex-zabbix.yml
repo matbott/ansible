@@ -27,24 +27,7 @@
           - Disco raíz: {{ ansible_mounts[0].size_total | int // (1024*1024) }} MB total
           - Zabbix: {{ 'Presente' if zabbix_agent_status.stat.exists else 'No instalado' }}
           - Cortex: {{ 'Presente' if cortex_agent_status.stat.exists else 'No instalado' }}
-      delegate_to: localhost
-      run_once: false
 
-    - name: Agregar reporte del host a la lista global
-      set_fact:
-        reporte_resultado: "{{ reporte_resultado + [reporte_host] }}"
-      delegate_to: localhost
-      run_once: false
-
-    - name: Mostrar reporte completo
+    - name: Mostrar reporte del host
       debug:
-        msg: "{{ reporte_resultado }}"
-      delegate_to: localhost
-      run_once: true
-
-    - name: Guardar reporte en archivo local (opcional)
-      copy:
-        content: "{{ reporte_resultado | join('\n\n') }}"
-        dest: "/tmp/reporte_recursos_{{ ansible_date_time.iso8601_basic_short }}.md"
-      delegate_to: localhost
-      run_once: true
+        msg: "{{ reporte_host }}"
