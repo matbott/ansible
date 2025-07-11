@@ -2,7 +2,7 @@
 - name: Reporte de Sistema, Recursos y Agentes
   hosts: lab
   gather_facts: yes
-  become: yes  # Necesario para acceder a algunos paths
+  become: yes
   vars:
     reporte_resultado: []
 
@@ -12,86 +12,25 @@
         path: /usr/sbin/zabbix_agentd
       register: zabbix_agent_status
 
-    - name: Verificar si Cortex está instalado - Método 1 (cytool)
-      stat:
-        path: /opt/traps/bin/cytool
-      register: cortex_cytool_status
-      failed_when: false
-
-    - name: Verificar si Cortex está instalado - Método 2 (directorio traps)
-      stat:
-        path: /opt/traps
-      register: cortex_dir_status
-      failed_when: false
-
-    - name: Verificar si Cortex está instalado - Método 3 (servicio)
-      systemd:
-        name: traps
-      register: cortex_service_status
-      failed_when: false
-      ignore_errors: yes
-
-    - name: Verificar si Cortex está instalado - Método 4 (proceso)
-      shell: ps aux | grep -i traps | grep -v grep
-      register: cortex_process_status
+    - name: Verificar si Cortex está instalado (rpm -q cortex-agent)
+      shell: rpm -q cortex-agent
+      register: cortex_rpm_check
       failed_when: false
       changed_when: false
-      ignore_errors: yes
-
-    - name: Verificar si Cortex está instalado - Método 5 (RPM)
-      shell: rpm -qa | grep -i traps
-      register: cortex_rpm_status
-      failed_when: false
-      changed_when: false
-      ignore_errors: yes
-
-    - name: Verificar si Cortex está instalado - Método 6 (find)
-      find:
-        paths: /opt
-        patterns: "*traps*"
-        file_type: directory
-      register: cortex_find_status
-      failed_when: false
-      ignore_errors: yes
 
     - name: Definir si Cortex está instalado
       set_fact:
-        cortex_installed: >-
-          {{
-            (cortex_cytool_status.stat.exists | default(false)) or
-            (cortex_dir_status.stat.exists | default(false)) or
-            (cortex_service_status.status is defined and cortex_service_status.status.LoadState == "loaded") or
-            (cortex_process_status.stdout_lines | default([]) | length > 0) or
-            (cortex_rpm_status.stdout_lines | default([]) | length > 0) or
-            (cortex_find_status.files | default([]) | length > 0)
-          }}
-
-    - name: Definir detalles de instalación de Cortex
-      set_fact:
+        cortex_installed: "{{ cortex_rpm_check.rc == 0 }}"
         cortex_details: |
-          - Cytool presente: {{ cortex_cytool_status.stat.exists | default(false) }}
-          - Directorio /opt/traps: {{ cortex_dir_status.stat.exists | default(false) }}
-          - Servicio traps: {{ 'Cargado' if cortex_service_status.status is defined and cortex_service_status.status.LoadState == "loaded" else 'No encontrado' }}
-          - Proceso activo: {{ 'Sí' if cortex_process_status.stdout_lines | default([]) | length > 0 else 'No' }}
-          - RPM instalado: {{ cortex_rpm_status.stdout | default('No encontrado') }}
-          - Directorios encontrados: {{ cortex_find_status.files | default([]) | length }}
+          - Resultado de rpm -q: {{ cortex_rpm_check.stdout | default('No encontrado') }}
           - RESULTADO: {{ 'INSTALADO' if cortex_installed else 'NO INSTALADO' }}
-
-    - name: Debug - Mostrar valores de detección de Cortex
-      debug:
-        msg: |
-          Host: {{ inventory_hostname }}
-          - cortex_dir_status.stat.exists: {{ cortex_dir_status.stat.exists | default('undefined') }}
-          - cortex_process_status.stdout_lines length: {{ cortex_process_status.stdout_lines | default([]) | length }}
-          - cortex_find_status.files length: {{ cortex_find_status.files | default([]) | length }}
-          - cortex_installed (calculado): {{ cortex_installed }}
 
     - name: Verificar estado del servicio Cortex (opcional)
       command: /opt/traps/bin/cytool runtime query
       register: cortex_runtime_status
       failed_when: false
       changed_when: false
-      when: cortex_cytool_status.stat.exists | default(false)
+      when: cortex_installed
 
     - name: Calcular porcentaje de uso de memoria
       set_fact:
