@@ -1,18 +1,13 @@
 ---
-- name: Probar WinRM con runas (become en Windows)
+- name: Verificar ejecución con privilegios escalados en Windows
   hosts: all
   gather_facts: no
-  vars:
-    ansible_become: yes
-    ansible_become_method: runas
-    ansible_become_user: "DOMINIO\\Administrador"
-    ansible_become_password: "TuPasswordSegura"
 
   tasks:
-    - name: Ejecutar whoami como usuario elevado
+    - name: Mostrar usuario actual (debe ser el 'Run As')
       win_shell: whoami
       register: resultado
 
-    - name: Mostrar el usuario actual (debería ser DOMINIO\Administrador)
+    - name: Mostrar resultado
       debug:
-        msg: "Usuario actual: {{ resultado.stdout }}"
+        msg: "Se ejecutó como: {{ resultado.stdout }}"
