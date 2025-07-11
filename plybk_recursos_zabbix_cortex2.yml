@@ -21,6 +21,9 @@
     - name: Definir si Cortex está instalado
       set_fact:
         cortex_installed: "{{ cortex_rpm_check.rc == 0 }}"
+
+    - name: Armar detalles de Cortex
+      set_fact:
         cortex_details: |
           - Resultado de rpm -q: {{ cortex_rpm_check.stdout | default('No encontrado') }}
           - RESULTADO: {{ 'INSTALADO' if cortex_installed else 'NO INSTALADO' }}
