@@ -5,6 +5,7 @@
   become: yes  # Necesario para acceder a algunos paths
   vars:
     reporte_resultado: []
+
   tasks:
     - name: Verificar si el agente de Zabbix está instalado
       stat:
@@ -53,7 +54,7 @@
       failed_when: false
       ignore_errors: yes
 
-    - name: Determinar estado de Cortex
+    - name: Definir si Cortex está instalado
       set_fact:
         cortex_installed: >-
           {{
@@ -64,6 +65,9 @@
             (cortex_rpm_status.stdout_lines | default([]) | length > 0) or
             (cortex_find_status.files | default([]) | length > 0)
           }}
+
+    - name: Definir detalles de instalación de Cortex
+      set_fact:
         cortex_details: |
           - Cytool presente: {{ cortex_cytool_status.stat.exists | default(false) }}
           - Directorio /opt/traps: {{ cortex_dir_status.stat.exists | default(false) }}
@@ -101,43 +105,43 @@
     - name: Armar reporte por host
       set_fact:
         reporte_host: |
-          
+
           ═══════════════════════════════════════════════════════════
           🖥️  HOST: {{ inventory_hostname | upper }}
           ═══════════════════════════════════════════════════════════
-          
+
           💻 PROCESAMIENTO:
              • CPU: {{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores
              • Arquitectura: {{ ansible_architecture }}
-          
+
           🧠 MEMORIA:
              • Total: {{ ansible_memtotal_mb }} MB ({{ (ansible_memtotal_mb/1024) | round(1) }} GB)
              • Disponible: {{ ansible_memfree_mb }} MB
              • Uso: {{ memory_usage_percent }}%
-          
+
           💾 ALMACENAMIENTO:
              • Disco Raíz: {{ disk_total_gb }} GB total
              • Usado: {{ disk_used_gb }} GB
              • Disponible: {{ ((ansible_mounts[0].size_available | int) / (1024*1024*1024)) | round(1) }} GB
-          
+
           📊 AGENTES DE MONITOREO:
              • Zabbix Agent: {% if zabbix_agent_status.stat.exists %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
-          
+
              • Cortex Agent: {% if cortex_installed %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
           {% if cortex_installed and cortex_runtime_status.rc is defined %}
                └─ Estado: {% if cortex_runtime_status.rc == 0 %}🟢 ACTIVO{% else %}🟡 INACTIVO{% endif %}
           {% endif %}
-          
+
           🔍 DETALLES DE CORTEX:
           {{ cortex_details }}
-          
+
           🔧 SISTEMA:
              • OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
              • Kernel: {{ ansible_kernel }}
              • Uptime: {{ ansible_uptime_seconds | int // 3600 }} horas
-          
+
           📅 Generado: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
-          
+
           ═══════════════════════════════════════════════════════════
 
     - name: Mostrar reporte del host
@@ -162,17 +166,17 @@
         📋 REPORTE CONSOLIDADO DE INFRAESTRUCTURA - {{ ansible_date_time.date }}
         ███████████████████████████████████████████████████████████████████████
         {{ hostvars['localhost']['reporte_consolidado'] | default('') }}
-        
+
         📊 RESUMEN:
         • Total de hosts procesados: {{ ansible_play_hosts | length }}
         • Generación completada: {{ ansible_date_time.time }}
-        
+
         ███████████████████████████████████████████████████████████████████████
         "
       register: reporte_consolidado_output
       delegate_to: localhost
       run_once: true
-      become: no  # Evitar problemas de permisos
+      become: no
 
     - name: Mostrar contenido del reporte consolidado
       debug:
