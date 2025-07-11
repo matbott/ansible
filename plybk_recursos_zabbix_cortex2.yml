@@ -2,7 +2,7 @@
 - name: Reporte de Sistema, Recursos y Agentes
   hosts: lab
   gather_facts: yes
-  become: no
+  become: yes  # Necesario para acceder a algunos paths
   vars:
     reporte_resultado: []
   tasks:
@@ -15,67 +15,62 @@
       stat:
         path: /opt/traps/bin/cytool
       register: cortex_agent_status
+      failed_when: false  # No fallar si no tenemos permisos
 
     - name: Verificar estado del servicio Cortex (opcional)
       command: /opt/traps/bin/cytool runtime query
       register: cortex_runtime_status
       failed_when: false
       changed_when: false
-      when: cortex_agent_status.stat.exists
+      when: cortex_agent_status.stat.exists is defined and cortex_agent_status.stat.exists
+
+    - name: Calcular porcentaje de uso de memoria
+      set_fact:
+        memory_usage_percent: "{{ ((ansible_memtotal_mb - ansible_memfree_mb) / ansible_memtotal_mb * 100) | round(1) }}"
+
+    - name: Calcular espacio en disco
+      set_fact:
+        disk_total_gb: "{{ (ansible_mounts[0].size_total | int / (1024*1024*1024)) | round(1) }}"
+        disk_used_gb: "{{ ((ansible_mounts[0].size_total - ansible_mounts[0].size_available) | int / (1024*1024*1024)) | round(1) }}"
 
     - name: Armar reporte por host
       set_fact:
         reporte_host: |
-          <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 10px 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-            <h2 style="color: #2c3e50; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
-              🖥️ Host: {{ inventory_hostname }}
-            </h2>
-            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-              <tr style="background-color: #ecf0f1;">
-                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold; width: 30%;">💻 CPU</td>
-                <td style="padding: 10px; border: 1px solid #bdc3c7;">{{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold; background-color: #ecf0f1;">🧠 Memoria</td>
-                <td style="padding: 10px; border: 1px solid #bdc3c7;">Total: {{ ansible_memtotal_mb }} MB | Disponible: {{ ansible_memfree_mb }} MB | Uso: {{ ((ansible_memtotal_mb - ansible_memfree_mb) / ansible_memtotal_mb * 100) | round(1) }}%</td>
-              </tr>
-              <tr style="background-color: #ecf0f1;">
-                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold;">💾 Disco Raíz</td>
-                <td style="padding: 10px; border: 1px solid #bdc3c7;">{{ (ansible_mounts[0].size_total | int / (1024*1024*1024)) | round(1) }} GB total | Usado: {{ (ansible_mounts[0].size_total - ansible_mounts[0].size_available) | int / (1024*1024*1024) | round(1) }} GB</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold; background-color: #ecf0f1;">📊 Zabbix Agent</td>
-                <td style="padding: 10px; border: 1px solid #bdc3c7;">
-                  {% if zabbix_agent_status.stat.exists %}
-                    <span style="color: #27ae60; font-weight: bold;">✅ Presente</span>
-                  {% else %}
-                    <span style="color: #e74c3c; font-weight: bold;">❌ No instalado</span>
-                  {% endif %}
-                </td>
-              </tr>
-              <tr style="background-color: #ecf0f1;">
-                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold;">🛡️ Cortex Agent</td>
-                <td style="padding: 10px; border: 1px solid #bdc3c7;">
-                  {% if cortex_agent_status.stat.exists %}
-                    <span style="color: #27ae60; font-weight: bold;">✅ Presente</span>
-                    {% if cortex_runtime_status.rc is defined %}
-                      | Estado: 
-                      {% if cortex_runtime_status.rc == 0 %}
-                        <span style="color: #27ae60; font-weight: bold;">🟢 Activo</span>
-                      {% else %}
-                        <span style="color: #f39c12; font-weight: bold;">🟡 Inactivo</span>
-                      {% endif %}
-                    {% endif %}
-                  {% else %}
-                    <span style="color: #e74c3c; font-weight: bold;">❌ No instalado</span>
-                  {% endif %}
-                </td>
-              </tr>
-            </table>
-            <div style="margin-top: 15px; padding: 8px; background-color: #d5dbdb; border-radius: 4px; font-size: 12px; color: #2c3e50;">
-              📅 Generado: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
-            </div>
-          </div>
+          
+          ═══════════════════════════════════════════════════════════
+          🖥️  HOST: {{ inventory_hostname | upper }}
+          ═══════════════════════════════════════════════════════════
+          
+          💻 PROCESAMIENTO:
+             • CPU: {{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores
+             • Arquitectura: {{ ansible_architecture }}
+          
+          🧠 MEMORIA:
+             • Total: {{ ansible_memtotal_mb }} MB ({{ (ansible_memtotal_mb/1024) | round(1) }} GB)
+             • Disponible: {{ ansible_memfree_mb }} MB
+             • Uso: {{ memory_usage_percent }}%
+          
+          💾 ALMACENAMIENTO:
+             • Disco Raíz: {{ disk_total_gb }} GB total
+             • Usado: {{ disk_used_gb }} GB
+             • Disponible: {{ ((ansible_mounts[0].size_available | int) / (1024*1024*1024)) | round(1) }} GB
+          
+          📊 AGENTES DE MONITOREO:
+             • Zabbix Agent: {% if zabbix_agent_status.stat.exists %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
+          
+             • Cortex Agent: {% if cortex_agent_status.stat is defined and cortex_agent_status.stat.exists %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
+          {% if cortex_agent_status.stat is defined and cortex_agent_status.stat.exists and cortex_runtime_status.rc is defined %}
+               └─ Estado: {% if cortex_runtime_status.rc == 0 %}🟢 ACTIVO{% else %}🟡 INACTIVO{% endif %}
+          {% endif %}
+          
+          🔧 SISTEMA:
+             • OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+             • Kernel: {{ ansible_kernel }}
+             • Uptime: {{ ansible_uptime_seconds | int // 3600 }} horas
+          
+          📅 Generado: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+          
+          ═══════════════════════════════════════════════════════════
 
     - name: Mostrar reporte del host
       debug:
@@ -83,16 +78,24 @@
 
     - name: Consolidar reportes de todos los hosts
       set_fact:
-        reporte_consolidado: "{{ reporte_consolidado | default('') + reporte_host }}"
+        reporte_consolidado: "{{ hostvars['localhost']['reporte_consolidado'] | default('') + reporte_host }}"
       delegate_to: localhost
       run_once: false
 
     - name: Mostrar reporte consolidado final
       debug:
         msg: |
-          <div style="background-color: #34495e; color: white; padding: 20px; margin: 20px 0; border-radius: 10px;">
-            <h1 style="text-align: center; margin: 0; color: #ecf0f1;">📋 REPORTE CONSOLIDADO DE INFRAESTRUCTURA</h1>
-          </div>
+          
+          ███████████████████████████████████████████████████████████████████████
+          📋 REPORTE CONSOLIDADO DE INFRAESTRUCTURA - {{ ansible_date_time.date }}
+          ███████████████████████████████████████████████████████████████████████
           {{ hostvars['localhost']['reporte_consolidado'] | default('') }}
+          
+          📊 RESUMEN:
+          • Total de hosts procesados: {{ ansible_play_hosts | length }}
+          • Hosts con Zabbix: {{ ansible_play_hosts | length if ansible_play_hosts else 0 }}
+          • Generación completada: {{ ansible_date_time.time }}
+          
+          ███████████████████████████████████████████████████████████████████████
       delegate_to: localhost
       run_once: true
