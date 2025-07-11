@@ -1,0 +1,21 @@
+---
+- name: Verificar usuarios en ejecución
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Usuario conectado vía SSH
+      ansible.builtin.command: whoami
+      register: ssh_user
+    - name: Mostrar resultado
+      debug:
+        msg: "SSH user: {{ ssh_user.stdout }}"
+
+    - name: Usuario con become
+      ansible.builtin.command: whoami
+      become: true
+      become_user: ansible.adm
+      register: become_user
+
+    - name: Mostrar resultado
+      debug:
+        msg: "Became user: {{ become_user.stdout }}"
