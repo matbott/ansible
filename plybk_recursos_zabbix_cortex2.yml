@@ -11,18 +11,73 @@
         path: /usr/sbin/zabbix_agentd
       register: zabbix_agent_status
 
-    - name: Verificar si Cortex está instalado
+    - name: Verificar si Cortex está instalado - Método 1 (cytool)
       stat:
         path: /opt/traps/bin/cytool
-      register: cortex_agent_status
-      failed_when: false  # No fallar si no tenemos permisos
+      register: cortex_cytool_status
+      failed_when: false
+
+    - name: Verificar si Cortex está instalado - Método 2 (directorio traps)
+      stat:
+        path: /opt/traps
+      register: cortex_dir_status
+      failed_when: false
+
+    - name: Verificar si Cortex está instalado - Método 3 (servicio)
+      systemd:
+        name: traps
+      register: cortex_service_status
+      failed_when: false
+      ignore_errors: yes
+
+    - name: Verificar si Cortex está instalado - Método 4 (proceso)
+      shell: ps aux | grep -i traps | grep -v grep
+      register: cortex_process_status
+      failed_when: false
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Verificar si Cortex está instalado - Método 5 (RPM)
+      shell: rpm -qa | grep -i traps
+      register: cortex_rpm_status
+      failed_when: false
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Verificar si Cortex está instalado - Método 6 (find)
+      find:
+        paths: /opt
+        patterns: "*traps*"
+        file_type: directory
+      register: cortex_find_status
+      failed_when: false
+      ignore_errors: yes
+
+    - name: Determinar estado de Cortex
+      set_fact:
+        cortex_installed: >-
+          {{
+            (cortex_cytool_status.stat.exists | default(false)) or
+            (cortex_dir_status.stat.exists | default(false)) or
+            (cortex_service_status.status is defined and cortex_service_status.status.LoadState == "loaded") or
+            (cortex_process_status.stdout_lines | default([]) | length > 0) or
+            (cortex_rpm_status.stdout_lines | default([]) | length > 0) or
+            (cortex_find_status.files | default([]) | length > 0)
+          }}
+        cortex_details: |
+          - Cytool presente: {{ cortex_cytool_status.stat.exists | default(false) }}
+          - Directorio /opt/traps: {{ cortex_dir_status.stat.exists | default(false) }}
+          - Servicio traps: {{ 'Cargado' if cortex_service_status.status is defined and cortex_service_status.status.LoadState == "loaded" else 'No encontrado' }}
+          - Proceso activo: {{ 'Sí' if cortex_process_status.stdout_lines | default([]) | length > 0 else 'No' }}
+          - RPM instalado: {{ cortex_rpm_status.stdout | default('No encontrado') }}
+          - Directorios encontrados: {{ cortex_find_status.files | default([]) | length }}
 
     - name: Verificar estado del servicio Cortex (opcional)
       command: /opt/traps/bin/cytool runtime query
       register: cortex_runtime_status
       failed_when: false
       changed_when: false
-      when: cortex_agent_status.stat.exists is defined and cortex_agent_status.stat.exists
+      when: cortex_cytool_status.stat.exists | default(false)
 
     - name: Calcular porcentaje de uso de memoria
       set_fact:
@@ -58,10 +113,13 @@
           📊 AGENTES DE MONITOREO:
              • Zabbix Agent: {% if zabbix_agent_status.stat.exists %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
           
-             • Cortex Agent: {% if cortex_agent_status.stat is defined and cortex_agent_status.stat.exists %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
-          {% if cortex_agent_status.stat is defined and cortex_agent_status.stat.exists and cortex_runtime_status.rc is defined %}
+             • Cortex Agent: {% if cortex_installed %}✅ INSTALADO{% else %}❌ NO INSTALADO{% endif %}
+          {% if cortex_installed and cortex_runtime_status.rc is defined %}
                └─ Estado: {% if cortex_runtime_status.rc == 0 %}🟢 ACTIVO{% else %}🟡 INACTIVO{% endif %}
           {% endif %}
+          
+          🔍 DETALLES DE CORTEX:
+          {{ cortex_details }}
           
           🔧 SISTEMA:
              • OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
@@ -73,8 +131,13 @@
           ═══════════════════════════════════════════════════════════
 
     - name: Mostrar reporte del host
+      shell: |
+        echo "{{ reporte_host }}"
+      register: reporte_output
+
+    - name: Mostrar contenido del reporte
       debug:
-        msg: "{{ reporte_host }}"
+        var: reporte_output.stdout_lines
 
     - name: Consolidar reportes de todos los hosts
       set_fact:
@@ -83,19 +146,26 @@
       run_once: false
 
     - name: Mostrar reporte consolidado final
+      shell: |
+        echo "
+        ███████████████████████████████████████████████████████████████████████
+        📋 REPORTE CONSOLIDADO DE INFRAESTRUCTURA - {{ ansible_date_time.date }}
+        ███████████████████████████████████████████████████████████████████████
+        {{ hostvars['localhost']['reporte_consolidado'] | default('') }}
+        
+        📊 RESUMEN:
+        • Total de hosts procesados: {{ ansible_play_hosts | length }}
+        • Hosts con Zabbix: {{ ansible_play_hosts | length if ansible_play_hosts else 0 }}
+        • Generación completada: {{ ansible_date_time.time }}
+        
+        ███████████████████████████████████████████████████████████████████████
+        "
+      register: reporte_consolidado_output
+      delegate_to: localhost
+      run_once: true
+
+    - name: Mostrar contenido del reporte consolidado
       debug:
-        msg: |
-          
-          ███████████████████████████████████████████████████████████████████████
-          📋 REPORTE CONSOLIDADO DE INFRAESTRUCTURA - {{ ansible_date_time.date }}
-          ███████████████████████████████████████████████████████████████████████
-          {{ hostvars['localhost']['reporte_consolidado'] | default('') }}
-          
-          📊 RESUMEN:
-          • Total de hosts procesados: {{ ansible_play_hosts | length }}
-          • Hosts con Zabbix: {{ ansible_play_hosts | length if ansible_play_hosts else 0 }}
-          • Generación completada: {{ ansible_date_time.time }}
-          
-          ███████████████████████████████████████████████████████████████████████
+        var: reporte_consolidado_output.stdout_lines
       delegate_to: localhost
       run_once: true
