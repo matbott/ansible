@@ -1,0 +1,98 @@
+---
+- name: Reporte de Sistema, Recursos y Agentes
+  hosts: lab
+  gather_facts: yes
+  become: no
+  vars:
+    reporte_resultado: []
+  tasks:
+    - name: Verificar si el agente de Zabbix está instalado
+      stat:
+        path: /usr/sbin/zabbix_agentd
+      register: zabbix_agent_status
+
+    - name: Verificar si Cortex está instalado
+      stat:
+        path: /opt/traps/bin/cytool
+      register: cortex_agent_status
+
+    - name: Verificar estado del servicio Cortex (opcional)
+      command: /opt/traps/bin/cytool runtime query
+      register: cortex_runtime_status
+      failed_when: false
+      changed_when: false
+      when: cortex_agent_status.stat.exists
+
+    - name: Armar reporte por host
+      set_fact:
+        reporte_host: |
+          <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 10px 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            <h2 style="color: #2c3e50; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+              🖥️ Host: {{ inventory_hostname }}
+            </h2>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+              <tr style="background-color: #ecf0f1;">
+                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold; width: 30%;">💻 CPU</td>
+                <td style="padding: 10px; border: 1px solid #bdc3c7;">{{ ansible_processor_cores }} cores, {{ ansible_processor_count }} procesadores</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold; background-color: #ecf0f1;">🧠 Memoria</td>
+                <td style="padding: 10px; border: 1px solid #bdc3c7;">Total: {{ ansible_memtotal_mb }} MB | Disponible: {{ ansible_memfree_mb }} MB | Uso: {{ ((ansible_memtotal_mb - ansible_memfree_mb) / ansible_memtotal_mb * 100) | round(1) }}%</td>
+              </tr>
+              <tr style="background-color: #ecf0f1;">
+                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold;">💾 Disco Raíz</td>
+                <td style="padding: 10px; border: 1px solid #bdc3c7;">{{ (ansible_mounts[0].size_total | int / (1024*1024*1024)) | round(1) }} GB total | Usado: {{ (ansible_mounts[0].size_total - ansible_mounts[0].size_available) | int / (1024*1024*1024) | round(1) }} GB</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold; background-color: #ecf0f1;">📊 Zabbix Agent</td>
+                <td style="padding: 10px; border: 1px solid #bdc3c7;">
+                  {% if zabbix_agent_status.stat.exists %}
+                    <span style="color: #27ae60; font-weight: bold;">✅ Presente</span>
+                  {% else %}
+                    <span style="color: #e74c3c; font-weight: bold;">❌ No instalado</span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr style="background-color: #ecf0f1;">
+                <td style="padding: 10px; border: 1px solid #bdc3c7; font-weight: bold;">🛡️ Cortex Agent</td>
+                <td style="padding: 10px; border: 1px solid #bdc3c7;">
+                  {% if cortex_agent_status.stat.exists %}
+                    <span style="color: #27ae60; font-weight: bold;">✅ Presente</span>
+                    {% if cortex_runtime_status.rc is defined %}
+                      | Estado: 
+                      {% if cortex_runtime_status.rc == 0 %}
+                        <span style="color: #27ae60; font-weight: bold;">🟢 Activo</span>
+                      {% else %}
+                        <span style="color: #f39c12; font-weight: bold;">🟡 Inactivo</span>
+                      {% endif %}
+                    {% endif %}
+                  {% else %}
+                    <span style="color: #e74c3c; font-weight: bold;">❌ No instalado</span>
+                  {% endif %}
+                </td>
+              </tr>
+            </table>
+            <div style="margin-top: 15px; padding: 8px; background-color: #d5dbdb; border-radius: 4px; font-size: 12px; color: #2c3e50;">
+              📅 Generado: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+            </div>
+          </div>
+
+    - name: Mostrar reporte del host
+      debug:
+        msg: "{{ reporte_host }}"
+
+    - name: Consolidar reportes de todos los hosts
+      set_fact:
+        reporte_consolidado: "{{ reporte_consolidado | default('') + reporte_host }}"
+      delegate_to: localhost
+      run_once: false
+
+    - name: Mostrar reporte consolidado final
+      debug:
+        msg: |
+          <div style="background-color: #34495e; color: white; padding: 20px; margin: 20px 0; border-radius: 10px;">
+            <h1 style="text-align: center; margin: 0; color: #ecf0f1;">📋 REPORTE CONSOLIDADO DE INFRAESTRUCTURA</h1>
+          </div>
+          {{ hostvars['localhost']['reporte_consolidado'] | default('') }}
+      delegate_to: localhost
+      run_once: true
