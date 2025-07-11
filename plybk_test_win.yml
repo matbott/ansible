@@ -1,6 +1,6 @@
 ---
 - name: Probar conexión con Windows
-  hosts: windows
+  hosts: lab
   gather_facts: yes
   tasks:
     - name: Mostrar información del sistema
