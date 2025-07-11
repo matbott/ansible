@@ -71,6 +71,16 @@
           - Proceso activo: {{ 'Sí' if cortex_process_status.stdout_lines | default([]) | length > 0 else 'No' }}
           - RPM instalado: {{ cortex_rpm_status.stdout | default('No encontrado') }}
           - Directorios encontrados: {{ cortex_find_status.files | default([]) | length }}
+          - RESULTADO: {{ 'INSTALADO' if cortex_installed else 'NO INSTALADO' }}
+
+    - name: Debug - Mostrar valores de detección de Cortex
+      debug:
+        msg: |
+          Host: {{ inventory_hostname }}
+          - cortex_dir_status.stat.exists: {{ cortex_dir_status.stat.exists | default('undefined') }}
+          - cortex_process_status.stdout_lines length: {{ cortex_process_status.stdout_lines | default([]) | length }}
+          - cortex_find_status.files length: {{ cortex_find_status.files | default([]) | length }}
+          - cortex_installed (calculado): {{ cortex_installed }}
 
     - name: Verificar estado del servicio Cortex (opcional)
       command: /opt/traps/bin/cytool runtime query
@@ -155,7 +165,6 @@
         
         📊 RESUMEN:
         • Total de hosts procesados: {{ ansible_play_hosts | length }}
-        • Hosts con Zabbix: {{ ansible_play_hosts | length if ansible_play_hosts else 0 }}
         • Generación completada: {{ ansible_date_time.time }}
         
         ███████████████████████████████████████████████████████████████████████
@@ -163,6 +172,7 @@
       register: reporte_consolidado_output
       delegate_to: localhost
       run_once: true
+      become: no  # Evitar problemas de permisos
 
     - name: Mostrar contenido del reporte consolidado
       debug:
