@@ -1,0 +1,65 @@
+- name: Reporte Definitivo de Usuarios Locales
+  hosts: lab
+  gather_facts: no
+  become: yes
+
+  vars:
+    # Asegúrate de que esta lista contenga los usuarios locales
+    # que SÍ están permitidos y tienen UID >= 1000.
+    # El usuario 'root' (UID 0) no será reportado por la lógica del playbook.
+    usuarios_locales_permitidos:
+      - ansible.adm
+
+  tasks:
+    - name: Leer el contenido del archivo /etc/passwd
+      ansible.builtin.slurp:
+        src: /etc/passwd
+      register: passwd_file
+
+    - name: Generar reporte de usuarios 100% locales
+      delegate_to: localhost
+      run_once: true
+      ansible.builtin.shell: |
+        echo -e "
+        {% set hosts_con_problemas = [] %}
+        {% for host in ansible_play_hosts_all %}
+          {% if hostvars[host].passwd_file is defined and not hostvars[host].passwd_file.failed %}
+            
+            {# 'slurp' codifica el contenido en base64, aquí lo decodificamos #}
+            {% set lines = hostvars[host].passwd_file.content | b64decode | splitlines %}
+            {% set usuarios_encontrados = [] %}
+
+            {% for line in lines %}
+              {% set fields = line.split(':') %}
+              {# fields[0] es el nombre, fields[2] es el UID #}
+              {% if fields | length > 2 and (fields[2] | int >= 1000) and (fields[0] not in usuarios_locales_permitidos) %}
+                {% set _ = usuarios_encontrados.append(fields[0]) %}
+              {% endif %}
+            {% endfor %}
+            
+            {% if usuarios_encontrados | length > 0 %}
+              {% set _ = hosts_con_problemas.append({'host': host, 'users': usuarios_encontrados}) %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+
+        ---
+        👤 Reporte Definitivo de Usuarios Locales (desde /etc/passwd)
+        ---
+        {% if hosts_con_problemas | length > 0 %}
+        Se encontraron los siguientes usuarios definidos localmente que deberían ser revisados:
+          {% for item in hosts_con_problemas %}
+        
+          --- Servidor: {{ item.host }} ---
+            {% for user in item.users %}
+            - {{ user }}
+            {% endfor %}
+          {% endfor %}
+        {% else %}
+        ✅ ¡Excelente! No se encontraron usuarios locales inesperados en ningún servidor.
+        {% endif %}
+        ---
+        "
+      args:
+        warn: false
+      changed_when: false
